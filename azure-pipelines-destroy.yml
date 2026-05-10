@@ -1,0 +1,63 @@
+name: tf-destroy-$(Date:yyyyMMdd)$(Rev:.r)
+
+trigger: none
+pr: none
+
+parameters:
+- name: environment
+  displayName: Environment
+  type: string
+  default: dev
+  values:
+  - dev
+  - stage
+  - prod
+
+- name: serviceConnection
+  displayName: Azure Service Connection Name
+  type: string
+  default: sc-azure-terraform
+
+- name: stateResourceGroup
+  displayName: Terraform State Resource Group
+  type: string
+  default: rg-tfstate-shared
+
+- name: stateStorageAccount
+  displayName: Terraform State Storage Account
+  type: string
+  default: sttfstatepyq8
+
+- name: stateContainer
+  displayName: Terraform State Container
+  type: string
+  default: tfstate
+
+- name: stateKeyPrefix
+  displayName: Terraform State Key Prefix
+  type: string
+  default: aks
+
+- name: ConfirmDestroy
+  displayName: ConfirmDestroy (type YES to execute destroy stage)
+  type: string
+  default: "NO"
+
+variables:
+- name: PIPELINE_APPROVER_EMAILS
+  value: $(Build.RequestedForEmail)
+
+extends:
+  template: pipelines/templates/terraform-stages.yml
+  parameters:
+    expectedMode: destroy
+    decommission: true
+    environment: ${{ parameters.environment }}
+    confirmDestroy: ${{ parameters.ConfirmDestroy }}
+    serviceConnection: ${{ parameters.serviceConnection }}
+    stateResourceGroup: ${{ parameters.stateResourceGroup }}
+    stateStorageAccount: ${{ parameters.stateStorageAccount }}
+    stateContainer: ${{ parameters.stateContainer }}
+    stateKeyPrefix: ${{ parameters.stateKeyPrefix }}
+    approvalNotifyUsers: "$(PIPELINE_APPROVER_EMAILS)"
+    approvalTimeoutInMinutes: 1440

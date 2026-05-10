@@ -1,0 +1,183 @@
+name: tfstate-bootstrap-$(Date:yyyyMMdd)$(Rev:.r)
+
+trigger: none
+pr: none
+
+parameters:
+- name: location
+  displayName: Azure Location
+  type: string
+  default: centralindia
+  values:
+  - malaysiawest
+  - southeastasia
+  - uaenorth
+  - centralindia
+  - koreacentral
+
+- name: resourceGroupName
+  displayName: State Resource Group
+  type: string
+  default: rg-tfstate-shared
+
+- name: storageAccountName
+  displayName: State Storage Account Name (existing name or prefix)
+  type: string
+  default: sttfstatechangeme01
+
+- name: containerName
+  displayName: State Container Name
+  type: string
+  default: tfstate
+
+- name: Decommission
+  displayName: Decommission
+  type: boolean
+  default: false
+
+- name: ConfirmDestroy
+  displayName: ConfirmDestroy (type YES to execute backend destroy)
+  type: string
+  default: "NO"
+
+- name: serviceConnection
+  displayName: Azure Service Connection Name
+  type: string
+  default: sc-azure-terraform
+
+variables:
+- name: PIPELINE_APPROVER_EMAILS
+  value: $(Build.RequestedForEmail)
+
+- name: APPROVAL_TIMEOUT_MINUTES
+  value: 1440
+
+stages:
+- stage: ValidateBootstrapRequest
+  displayName: Validate Bootstrap Request
+  jobs:
+  - job: Validate
+    displayName: Validate bootstrap inputs
+    pool:
+      vmImage: ubuntu-latest
+    steps:
+    - bash: |
+        set -euo pipefail
+        DECOMMISSION_VALUE="${{ parameters.Decommission }}"
+        DECOMMISSION_LOWER="$(echo "$DECOMMISSION_VALUE" | tr '[:upper:]' '[:lower:]')"
+
+        if [[ "$DECOMMISSION_LOWER" == "true" && "${{ parameters.ConfirmDestroy }}" != "YES" ]]; then
+          echo "##vso[task.logissue type=error]ConfirmDestroy must be YES when Decommission=true."
+          exit 1
+        fi
+      displayName: Validate destroy confirmation
+
+- ${{ if eq(parameters.Decommission, false) }}:
+  - stage: BootstrapCreate
+    displayName: Bootstrap Terraform State Backend
+    dependsOn: ValidateBootstrapRequest
+    jobs:
+    - job: Bootstrap
+      displayName: Create resource group, storage account, and container
+      pool:
+        vmImage: ubuntu-latest
+      steps:
+      - checkout: self
+
+      - task: AzureCLI@2
+        displayName: Run tfstate bootstrap create automation
+        inputs:
+          azureSubscription: ${{ parameters.serviceConnection }}
+          scriptType: bash
+          scriptLocation: inlineScript
+          inlineScript: |
+            set -euo pipefail
+            chmod +x "$(Build.SourcesDirectory)/scripts/bootstrap-tfstate-backend.sh"
+
+            OUTPUT_FILE="$(mktemp)"
+
+            set +e
+            "$(Build.SourcesDirectory)/scripts/bootstrap-tfstate-backend.sh" \
+              "create" \
+              "${{ parameters.location }}" \
+              "${{ parameters.resourceGroupName }}" \
+              "${{ parameters.storageAccountName }}" \
+              "${{ parameters.containerName }}" 2>&1 | tee "$OUTPUT_FILE"
+            SCRIPT_EXIT_CODE=${PIPESTATUS[0]}
+            set -e
+
+            if [[ "$SCRIPT_EXIT_CODE" -ne 0 ]]; then
+              echo "##vso[task.logissue type=error]Bootstrap script failed with exit code $SCRIPT_EXIT_CODE."
+              rm -f "$OUTPUT_FILE"
+              exit "$SCRIPT_EXIT_CODE"
+            fi
+
+            ACTUAL_STORAGE_ACCOUNT_NAME="$(awk -F'=' '/^TFSTATE_STORAGE_ACCOUNT_NAME=/{print $2}' "$OUTPUT_FILE" | tail -1)"
+            rm -f "$OUTPUT_FILE"
+
+            if [[ -z "$ACTUAL_STORAGE_ACCOUNT_NAME" ]]; then
+              echo "##vso[task.logissue type=error]Could not determine generated storage account name from bootstrap output."
+              exit 1
+            fi
+
+            echo "##vso[task.setvariable variable=TF_STATE_RESOURCE_GROUP]${{ parameters.resourceGroupName }}"
+            echo "##vso[task.setvariable variable=TF_STATE_STORAGE_ACCOUNT]$ACTUAL_STORAGE_ACCOUNT_NAME"
+            echo "##vso[task.setvariable variable=TF_STATE_CONTAINER]${{ parameters.containerName }}"
+
+      - bash: |
+          echo "Bootstrap create completed successfully."
+          echo "Use these values in Apply/Destroy pipeline variables:"
+          echo "  TF_STATE_RESOURCE_GROUP=${{ parameters.resourceGroupName }}"
+          echo "  TF_STATE_STORAGE_ACCOUNT=$(TF_STATE_STORAGE_ACCOUNT)"
+          echo "  TF_STATE_CONTAINER=${{ parameters.containerName }}"
+        displayName: Print next-step variables
+
+- ${{ if eq(parameters.Decommission, true) }}:
+  - stage: ApproveBootstrapDestroy
+    displayName: Manual Approval for Backend Destroy
+    dependsOn: ValidateBootstrapRequest
+    condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'), eq('${{ parameters.ConfirmDestroy }}', 'YES'))
+    jobs:
+    - job: WaitForBackendDestroyApproval
+      displayName: Wait for backend destroy approval
+      pool: server
+      timeoutInMinutes: 1440
+      steps:
+      - task: ManualValidation@0
+        timeoutInMinutes: 1440
+        inputs:
+          notifyUsers: $(PIPELINE_APPROVER_EMAILS)
+          instructions: |
+            You are about to destroy Terraform backend resources.
+            This will delete the backend resource group and all contained resources.
+            Approve only after all Terraform-managed environments are already destroyed.
+          onTimeout: reject
+
+  - stage: BootstrapDestroy
+    displayName: Destroy Terraform State Backend
+    dependsOn: ApproveBootstrapDestroy
+    condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'), eq('${{ parameters.ConfirmDestroy }}', 'YES'))
+    jobs:
+    - job: DestroyBackend
+      displayName: Destroy resource group, storage account, and container
+      pool:
+        vmImage: ubuntu-latest
+      steps:
+      - checkout: self
+
+      - task: AzureCLI@2
+        displayName: Run tfstate bootstrap destroy automation
+        inputs:
+          azureSubscription: ${{ parameters.serviceConnection }}
+          scriptType: bash
+          scriptLocation: inlineScript
+          inlineScript: |
+            set -euo pipefail
+            chmod +x "$(Build.SourcesDirectory)/scripts/bootstrap-tfstate-backend.sh"
+
+            "$(Build.SourcesDirectory)/scripts/bootstrap-tfstate-backend.sh" \
+              "destroy" \
+              "${{ parameters.location }}" \
+              "${{ parameters.resourceGroupName }}" \
+              "${{ parameters.storageAccountName }}" \
+              "${{ parameters.containerName }}"

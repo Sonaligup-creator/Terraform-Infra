@@ -1,0 +1,32 @@
+# Terraform local artifacts
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Variable files that may contain secrets
+*.auto.tfvars
+*.auto.tfvars.json
+*.secrets.tfvars
+*.secrets.tfvars.json
+
+# Keep non-secret environment defaults committed
+!environments/*/terraform.tfvars
+!environments/*/backend.hcl.example
+
+# Credentials and certificates
+*.pem
+*.key
+*.pfx
+*.kubeconfig
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

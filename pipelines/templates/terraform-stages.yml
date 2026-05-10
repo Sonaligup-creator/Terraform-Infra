@@ -1,0 +1,496 @@
+parameters:
+- name: decommission
+  type: boolean
+  default: false
+
+- name: expectedMode
+  type: string
+  default: any
+  values:
+  - any
+  - apply
+  - destroy
+
+- name: environment
+  type: string
+  default: dev
+  values:
+  - dev
+  - stage
+  - prod
+
+- name: confirmDestroy
+  type: string
+  default: "NO"
+
+- name: serviceConnection
+  type: string
+  default: ""
+
+- name: stateResourceGroup
+  type: string
+  default: ""
+
+- name: stateStorageAccount
+  type: string
+  default: ""
+
+- name: stateContainer
+  type: string
+  default: ""
+
+- name: stateKeyPrefix
+  type: string
+  default: "aks"
+
+- name: terraformVersion
+  type: string
+  default: "1.8.5"
+
+- name: approvalNotifyUsers
+  type: string
+  default: "$(Build.RequestedForEmail)"
+
+- name: approvalTimeoutInMinutes
+  type: number
+  default: 1440
+
+stages:
+- stage: PrepareTerraform
+  displayName: Prepare Terraform
+  condition: and(succeeded(), eq(${{ parameters.decommission }}, false))
+  jobs:
+  - job: Prepare
+    displayName: Prepare tools for apply path
+    pool:
+      vmImage: ubuntu-latest
+    steps:
+    - bash: |
+        set -euo pipefail
+        if ! command -v terraform >/dev/null 2>&1; then
+          curl -fsSL "https://releases.hashicorp.com/terraform/${{ parameters.terraformVersion }}/terraform_${{ parameters.terraformVersion }}_linux_amd64.zip" -o terraform.zip
+          sudo unzip -o terraform.zip -d /usr/local/bin
+          rm terraform.zip
+        fi
+        terraform version
+      displayName: Install Terraform
+
+- stage: ValidateApply
+  displayName: Validate - Apply
+  dependsOn: PrepareTerraform
+  condition: and(succeeded(), eq(${{ parameters.decommission }}, false))
+  jobs:
+  - job: ValidateApply
+    displayName: Terraform validate for apply
+    pool:
+      vmImage: ubuntu-latest
+    steps:
+    - bash: |
+        set -euo pipefail
+        if ! command -v terraform >/dev/null 2>&1; then
+          curl -fsSL "https://releases.hashicorp.com/terraform/${{ parameters.terraformVersion }}/terraform_${{ parameters.terraformVersion }}_linux_amd64.zip" -o terraform.zip
+          sudo unzip -o terraform.zip -d /usr/local/bin
+          rm terraform.zip
+        fi
+        terraform version
+      displayName: Install Terraform
+
+    - bash: |
+        set -euo pipefail
+        EXPECTED_MODE="${{ parameters.expectedMode }}"
+        DECOMMISSION_VALUE="${{ parameters.decommission }}"
+        DECOMMISSION_LOWER="$(echo "$DECOMMISSION_VALUE" | tr '[:upper:]' '[:lower:]')"
+
+        if [[ "$EXPECTED_MODE" == "apply" && "$DECOMMISSION_LOWER" != "false" ]]; then
+          echo "##vso[task.logissue type=error]Apply mode requires decommission=false."
+          exit 1
+        fi
+
+        if [[ "$EXPECTED_MODE" == "destroy" && "$DECOMMISSION_LOWER" != "true" ]]; then
+          echo "##vso[task.logissue type=error]Destroy mode requires decommission=true."
+          exit 1
+        fi
+
+        TFVARS_FILE="$(Build.SourcesDirectory)/environments/${{ parameters.environment }}/terraform.tfvars"
+        LOCATION="$(grep -E '^[[:space:]]*location[[:space:]]*=' "$TFVARS_FILE" | head -1 | awk -F'=' '{print $2}' | tr -d ' \"')"
+
+        case "$LOCATION" in
+          malaysiawest|southeastasia|uaenorth|centralindia|koreacentral)
+            echo "Location check passed: $LOCATION"
+            ;;
+          *)
+            echo "##vso[task.logissue type=error]Location '$LOCATION' is not allowed by subscription policy."
+            exit 1
+            ;;
+        esac
+      displayName: Validate allowed Azure location
+
+    - bash: |
+        set -euo pipefail
+        cd "$(Build.SourcesDirectory)/stacks/aks"
+        terraform init -backend=false
+
+        if ! terraform fmt -check -recursive; then
+          echo "##vso[task.logissue type=warning]terraform fmt check found formatting differences. Continuing with validate."
+        fi
+
+        terraform validate
+      displayName: Run terraform validate
+
+- stage: ValidateDestroy
+  displayName: Validate - Destroy
+  dependsOn: []
+  condition: and(succeeded(), eq(${{ parameters.decommission }}, true))
+  jobs:
+  - job: ValidateDestroy
+    displayName: Terraform validate for destroy
+    pool:
+      vmImage: ubuntu-latest
+    steps:
+    - bash: |
+        set -euo pipefail
+        if ! command -v terraform >/dev/null 2>&1; then
+          curl -fsSL "https://releases.hashicorp.com/terraform/${{ parameters.terraformVersion }}/terraform_${{ parameters.terraformVersion }}_linux_amd64.zip" -o terraform.zip
+          sudo unzip -o terraform.zip -d /usr/local/bin
+          rm terraform.zip
+        fi
+        terraform version
+      displayName: Install Terraform
+
+    - bash: |
+        set -euo pipefail
+        EXPECTED_MODE="${{ parameters.expectedMode }}"
+        DECOMMISSION_VALUE="${{ parameters.decommission }}"
+        DECOMMISSION_LOWER="$(echo "$DECOMMISSION_VALUE" | tr '[:upper:]' '[:lower:]')"
+
+        if [[ "$EXPECTED_MODE" == "apply" && "$DECOMMISSION_LOWER" != "false" ]]; then
+          echo "##vso[task.logissue type=error]Apply mode requires decommission=false."
+          exit 1
+        fi
+
+        if [[ "$EXPECTED_MODE" == "destroy" && "$DECOMMISSION_LOWER" != "true" ]]; then
+          echo "##vso[task.logissue type=error]Destroy mode requires decommission=true."
+          exit 1
+        fi
+
+        TFVARS_FILE="$(Build.SourcesDirectory)/environments/${{ parameters.environment }}/terraform.tfvars"
+        LOCATION="$(grep -E '^[[:space:]]*location[[:space:]]*=' "$TFVARS_FILE" | head -1 | awk -F'=' '{print $2}' | tr -d ' \"')"
+
+        case "$LOCATION" in
+          malaysiawest|southeastasia|uaenorth|centralindia|koreacentral)
+            echo "Location check passed: $LOCATION"
+            ;;
+          *)
+            echo "##vso[task.logissue type=error]Location '$LOCATION' is not allowed by subscription policy."
+            exit 1
+            ;;
+        esac
+      displayName: Validate allowed Azure location
+
+    - bash: |
+        set -euo pipefail
+        cd "$(Build.SourcesDirectory)/stacks/aks"
+        terraform init -backend=false
+
+        if ! terraform fmt -check -recursive; then
+          echo "##vso[task.logissue type=warning]terraform fmt check found formatting differences. Continuing with validate."
+        fi
+
+        terraform validate
+      displayName: Run terraform validate
+
+- stage: PlanApply
+  displayName: "${{ parameters.environment }}: Plan - Apply"
+  dependsOn: ValidateApply
+  condition: and(succeeded(), eq(${{ parameters.decommission }}, false))
+  jobs:
+  - job: Plan
+    displayName: Terraform plan for apply
+    pool:
+      vmImage: ubuntu-latest
+    steps:
+    - bash: |
+        set -euo pipefail
+        if ! command -v terraform >/dev/null 2>&1; then
+          curl -fsSL "https://releases.hashicorp.com/terraform/${{ parameters.terraformVersion }}/terraform_${{ parameters.terraformVersion }}_linux_amd64.zip" -o terraform.zip
+          sudo unzip -o terraform.zip -d /usr/local/bin
+          rm terraform.zip
+        fi
+        terraform version
+      displayName: Install Terraform
+
+    - task: AzureCLI@2
+      displayName: Terraform init and plan
+      inputs:
+        azureSubscription: ${{ parameters.serviceConnection }}
+        addSpnToEnvironment: true
+        scriptType: bash
+        scriptLocation: inlineScript
+        inlineScript: |
+          set -euo pipefail
+          cd "$(Build.SourcesDirectory)/stacks/aks"
+
+          export ARM_CLIENT_ID="${servicePrincipalId:-}"
+          export ARM_TENANT_ID="${tenantId:-}"
+          export ARM_SUBSCRIPTION_ID="$(az account show --query id -o tsv)"
+          export ARM_USE_AZUREAD=true
+
+          if [[ -n "${idToken:-}" ]]; then
+            export ARM_USE_OIDC=true
+            export ARM_OIDC_TOKEN="$idToken"
+            unset ARM_CLIENT_SECRET
+          elif [[ -n "${servicePrincipalKey:-}" ]]; then
+            export ARM_USE_OIDC=false
+            export ARM_CLIENT_SECRET="$servicePrincipalKey"
+          fi
+
+          terraform init -reconfigure \
+            -backend-config="resource_group_name=${{ parameters.stateResourceGroup }}" \
+            -backend-config="storage_account_name=${{ parameters.stateStorageAccount }}" \
+            -backend-config="container_name=${{ parameters.stateContainer }}" \
+            -backend-config="key=${{ parameters.stateKeyPrefix }}-${{ parameters.environment }}.tfstate" \
+            -backend-config="use_azuread_auth=true" \
+            -backend-config="use_oidc=true" \
+            -backend-config="subscription_id=${ARM_SUBSCRIPTION_ID}" \
+            -backend-config="tenant_id=${ARM_TENANT_ID}" \
+            -backend-config="client_id=${ARM_CLIENT_ID}"
+
+          terraform plan \
+            -input=false \
+            -var-file="$(Build.SourcesDirectory)/environments/${{ parameters.environment }}/terraform.tfvars" \
+            -out="$(Build.ArtifactStagingDirectory)/tfplan"
+
+    - publish: $(Build.ArtifactStagingDirectory)/tfplan
+      artifact: tfplan-${{ parameters.environment }}
+      displayName: Publish tfplan artifact
+
+- stage: ApproveApply
+  displayName: Manual Approval for Apply
+  dependsOn: PlanApply
+  condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'), eq(${{ parameters.decommission }}, false))
+  jobs:
+  - job: WaitForApplyApproval
+    displayName: Wait for apply approval
+    pool: server
+    timeoutInMinutes: ${{ parameters.approvalTimeoutInMinutes }}
+    steps:
+    - task: ManualValidation@0
+      timeoutInMinutes: ${{ parameters.approvalTimeoutInMinutes }}
+      inputs:
+        notifyUsers: ${{ parameters.approvalNotifyUsers }}
+        instructions: |
+          Review PlanApply stage and tfplan artifact for environment ${{ parameters.environment }}.
+          Approve to continue with Terraform apply.
+        onTimeout: reject
+
+- stage: Apply
+  displayName: "${{ parameters.environment }}: Apply"
+  dependsOn: ApproveApply
+  condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'), eq(${{ parameters.decommission }}, false))
+  jobs:
+  - job: Apply
+    displayName: Terraform apply
+    pool:
+      vmImage: ubuntu-latest
+    steps:
+    - checkout: self
+
+    - download: current
+      artifact: tfplan-${{ parameters.environment }}
+
+    - bash: |
+        set -euo pipefail
+        if ! command -v terraform >/dev/null 2>&1; then
+          curl -fsSL "https://releases.hashicorp.com/terraform/${{ parameters.terraformVersion }}/terraform_${{ parameters.terraformVersion }}_linux_amd64.zip" -o terraform.zip
+          sudo unzip -o terraform.zip -d /usr/local/bin
+          rm terraform.zip
+        fi
+        terraform version
+      displayName: Install Terraform
+
+    - task: AzureCLI@2
+      displayName: Terraform apply
+      inputs:
+        azureSubscription: ${{ parameters.serviceConnection }}
+        addSpnToEnvironment: true
+        scriptType: bash
+        scriptLocation: inlineScript
+        inlineScript: |
+          set -euo pipefail
+          cd "$(Build.SourcesDirectory)/stacks/aks"
+
+          export ARM_CLIENT_ID="${servicePrincipalId:-}"
+          export ARM_TENANT_ID="${tenantId:-}"
+          export ARM_SUBSCRIPTION_ID="$(az account show --query id -o tsv)"
+          export ARM_USE_AZUREAD=true
+
+          if [[ -n "${idToken:-}" ]]; then
+            export ARM_USE_OIDC=true
+            export ARM_OIDC_TOKEN="$idToken"
+            unset ARM_CLIENT_SECRET
+          elif [[ -n "${servicePrincipalKey:-}" ]]; then
+            export ARM_USE_OIDC=false
+            export ARM_CLIENT_SECRET="$servicePrincipalKey"
+          fi
+
+          terraform init -reconfigure \
+            -backend-config="resource_group_name=${{ parameters.stateResourceGroup }}" \
+            -backend-config="storage_account_name=${{ parameters.stateStorageAccount }}" \
+            -backend-config="container_name=${{ parameters.stateContainer }}" \
+            -backend-config="key=${{ parameters.stateKeyPrefix }}-${{ parameters.environment }}.tfstate" \
+            -backend-config="use_azuread_auth=true" \
+            -backend-config="use_oidc=true" \
+            -backend-config="subscription_id=${ARM_SUBSCRIPTION_ID}" \
+            -backend-config="tenant_id=${ARM_TENANT_ID}" \
+            -backend-config="client_id=${ARM_CLIENT_ID}"
+
+          terraform apply -input=false -auto-approve "$(Pipeline.Workspace)/tfplan-${{ parameters.environment }}/tfplan"
+
+- stage: PlanDestroy
+  displayName: "${{ parameters.environment }}: Plan - Destroy"
+  dependsOn: ValidateDestroy
+  condition: and(succeeded(), eq(${{ parameters.decommission }}, true))
+  jobs:
+  - job: PlanDestroy
+    displayName: Terraform plan destroy
+    pool:
+      vmImage: ubuntu-latest
+    steps:
+    - bash: |
+        set -euo pipefail
+        if ! command -v terraform >/dev/null 2>&1; then
+          curl -fsSL "https://releases.hashicorp.com/terraform/${{ parameters.terraformVersion }}/terraform_${{ parameters.terraformVersion }}_linux_amd64.zip" -o terraform.zip
+          sudo unzip -o terraform.zip -d /usr/local/bin
+          rm terraform.zip
+        fi
+        terraform version
+      displayName: Install Terraform
+
+    - task: AzureCLI@2
+      displayName: Terraform init and destroy plan
+      inputs:
+        azureSubscription: ${{ parameters.serviceConnection }}
+        addSpnToEnvironment: true
+        scriptType: bash
+        scriptLocation: inlineScript
+        inlineScript: |
+          set -euo pipefail
+          cd "$(Build.SourcesDirectory)/stacks/aks"
+
+          export ARM_CLIENT_ID="${servicePrincipalId:-}"
+          export ARM_TENANT_ID="${tenantId:-}"
+          export ARM_SUBSCRIPTION_ID="$(az account show --query id -o tsv)"
+          export ARM_USE_AZUREAD=true
+
+          if [[ -n "${idToken:-}" ]]; then
+            export ARM_USE_OIDC=true
+            export ARM_OIDC_TOKEN="$idToken"
+            unset ARM_CLIENT_SECRET
+          elif [[ -n "${servicePrincipalKey:-}" ]]; then
+            export ARM_USE_OIDC=false
+            export ARM_CLIENT_SECRET="$servicePrincipalKey"
+          fi
+
+          terraform init -reconfigure \
+            -backend-config="resource_group_name=${{ parameters.stateResourceGroup }}" \
+            -backend-config="storage_account_name=${{ parameters.stateStorageAccount }}" \
+            -backend-config="container_name=${{ parameters.stateContainer }}" \
+            -backend-config="key=${{ parameters.stateKeyPrefix }}-${{ parameters.environment }}.tfstate" \
+            -backend-config="use_azuread_auth=true" \
+            -backend-config="use_oidc=true" \
+            -backend-config="subscription_id=${ARM_SUBSCRIPTION_ID}" \
+            -backend-config="tenant_id=${ARM_TENANT_ID}" \
+            -backend-config="client_id=${ARM_CLIENT_ID}"
+
+          terraform plan \
+            -destroy \
+            -input=false \
+            -var-file="$(Build.SourcesDirectory)/environments/${{ parameters.environment }}/terraform.tfvars" \
+            -out="$(Build.ArtifactStagingDirectory)/tfdestroyplan"
+
+    - publish: $(Build.ArtifactStagingDirectory)/tfdestroyplan
+      artifact: tfdestroyplan-${{ parameters.environment }}
+      displayName: Publish destroy plan artifact
+
+- stage: ApproveDestroy
+  displayName: Manual Approval for Destroy
+  dependsOn: PlanDestroy
+  condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'), eq('${{ parameters.confirmDestroy }}', 'YES'), eq(${{ parameters.decommission }}, true))
+  jobs:
+  - job: WaitForDestroyApproval
+    displayName: Wait for destroy approval
+    pool: server
+    timeoutInMinutes: ${{ parameters.approvalTimeoutInMinutes }}
+    steps:
+    - task: ManualValidation@0
+      timeoutInMinutes: ${{ parameters.approvalTimeoutInMinutes }}
+      inputs:
+        notifyUsers: ${{ parameters.approvalNotifyUsers }}
+        instructions: |
+          Review PlanDestroy stage and destroy plan artifact for environment ${{ parameters.environment }}.
+          Approve to continue with Terraform destroy.
+          ConfirmDestroy must be YES for this stage to run.
+        onTimeout: reject
+
+- stage: Destroy
+  displayName: "${{ parameters.environment }}: Destroy"
+  dependsOn: ApproveDestroy
+  condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'), eq('${{ parameters.confirmDestroy }}', 'YES'), eq(${{ parameters.decommission }}, true))
+  jobs:
+  - job: Destroy
+    displayName: Terraform destroy
+    pool:
+      vmImage: ubuntu-latest
+    steps:
+    - checkout: self
+
+    - download: current
+      artifact: tfdestroyplan-${{ parameters.environment }}
+
+    - bash: |
+        set -euo pipefail
+        if ! command -v terraform >/dev/null 2>&1; then
+          curl -fsSL "https://releases.hashicorp.com/terraform/${{ parameters.terraformVersion }}/terraform_${{ parameters.terraformVersion }}_linux_amd64.zip" -o terraform.zip
+          sudo unzip -o terraform.zip -d /usr/local/bin
+          rm terraform.zip
+        fi
+        terraform version
+      displayName: Install Terraform
+
+    - task: AzureCLI@2
+      displayName: Terraform destroy
+      inputs:
+        azureSubscription: ${{ parameters.serviceConnection }}
+        addSpnToEnvironment: true
+        scriptType: bash
+        scriptLocation: inlineScript
+        inlineScript: |
+          set -euo pipefail
+          cd "$(Build.SourcesDirectory)/stacks/aks"
+
+          export ARM_CLIENT_ID="${servicePrincipalId:-}"
+          export ARM_TENANT_ID="${tenantId:-}"
+          export ARM_SUBSCRIPTION_ID="$(az account show --query id -o tsv)"
+          export ARM_USE_AZUREAD=true
+
+          if [[ -n "${idToken:-}" ]]; then
+            export ARM_USE_OIDC=true
+            export ARM_OIDC_TOKEN="$idToken"
+            unset ARM_CLIENT_SECRET
+          elif [[ -n "${servicePrincipalKey:-}" ]]; then
+            export ARM_USE_OIDC=false
+            export ARM_CLIENT_SECRET="$servicePrincipalKey"
+          fi
+
+          terraform init -reconfigure \
+            -backend-config="resource_group_name=${{ parameters.stateResourceGroup }}" \
+            -backend-config="storage_account_name=${{ parameters.stateStorageAccount }}" \
+            -backend-config="container_name=${{ parameters.stateContainer }}" \
+            -backend-config="key=${{ parameters.stateKeyPrefix }}-${{ parameters.environment }}.tfstate" \
+            -backend-config="use_azuread_auth=true" \
+            -backend-config="use_oidc=true" \
+            -backend-config="subscription_id=${ARM_SUBSCRIPTION_ID}" \
+            -backend-config="tenant_id=${ARM_TENANT_ID}" \
+            -backend-config="client_id=${ARM_CLIENT_ID}"
+
+          terraform apply -input=false -auto-approve "$(Pipeline.Workspace)/tfdestroyplan-${{ parameters.environment }}/tfdestroyplan"

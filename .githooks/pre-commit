@@ -1,0 +1,23 @@
+#!/bin/sh
+
+allowed_name='sonaligupta0629-arch'
+allowed_email='sonaligupta0629@gmail.com'
+
+author_ident=$(git var GIT_AUTHOR_IDENT)
+committer_ident=$(git var GIT_COMMITTER_IDENT)
+
+case "$author_ident" in
+  *"$allowed_name <$allowed_email>"*) ;;
+  *)
+    echo "Commit blocked: author must be $allowed_name <$allowed_email>." >&2
+    exit 1
+    ;;
+esac
+
+case "$committer_ident" in
+  *"$allowed_name <$allowed_email>"*) ;;
+  *)
+    echo "Commit blocked: committer must be $allowed_name <$allowed_email>." >&2
+    exit 1
+    ;;
+esac
