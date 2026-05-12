@@ -258,6 +258,8 @@ stages:
           terraform plan \
             -input=false \
             -var-file="$(Build.SourcesDirectory)/environments/${{ parameters.environment }}/terraform.tfvars" \
+            -var="mongodb_atlas_connection_string=$(mongo-connection-string)" \
+            -var="jwt_key=$(jwt_key)" \
             -out="$(Build.ArtifactStagingDirectory)/tfplan"
 
     - publish: $(Build.ArtifactStagingDirectory)/tfplan
@@ -406,6 +408,8 @@ stages:
             -destroy \
             -input=false \
             -var-file="$(Build.SourcesDirectory)/environments/${{ parameters.environment }}/terraform.tfvars" \
+            -var="mongodb_atlas_connection_string=$(mongo-connection-string)" \
+            -var="jwt_key=$(jwt_key)" \
             -out="$(Build.ArtifactStagingDirectory)/tfdestroyplan"
 
     - publish: $(Build.ArtifactStagingDirectory)/tfdestroyplan

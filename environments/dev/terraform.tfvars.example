@@ -1,0 +1,52 @@
+# Terraform Variables Example for Dev Environment
+# Copy this to environments/dev/terraform.tfvars and fill in your values
+
+# ====== Project Configuration ======
+project_name = "microservices"
+environment  = "dev"
+location     = "centralindia"
+
+# ====== MongoDB Atlas Configuration ======
+# Connection string from your MongoDB Atlas cluster (SRV format)
+# These will be passed by the pipeline from Azure DevOps variable group (Mongo-secrets)
+# Keep empty here; the pipeline overrides with -var flags
+# mongodb_atlas_connection_string = ""
+# jwt_key = ""
+
+# ====== Azure Container Registry ======
+acr_sku = "Basic"
+
+# ====== AKS Cluster Configuration ======
+sku_tier           = "Free"
+kubernetes_version = null  # null = use default regional version
+
+# ====== AKS Node Pool Sizing ======
+enable_user_node_pool = true
+
+# System node pool (runs system addons)
+system_node_vm_size      = "Standard_D2s_v3"
+system_node_min_count    = 1
+system_node_max_count    = 3
+system_node_os_disk_size_gb = 128
+system_node_max_pods     = 30
+
+# User node pool (runs your workloads)
+user_node_vm_size        = "Standard_D2s_v3"
+user_node_min_count      = 1
+user_node_max_count      = 5
+user_node_os_disk_size_gb = 128
+user_node_max_pods       = 30
+
+# ====== Networking ======
+vnet_address_space    = ["10.40.0.0/16"]
+aks_subnet_prefixes   = ["10.40.1.0/24"]
+
+# ====== Monitoring ======
+log_analytics_retention_days = 30
+
+# ====== Common Tags ======
+common_tags = {
+  project   = "microservices-ecommerce"
+  managed_by = "terraform"
+  environment = "dev"
+}

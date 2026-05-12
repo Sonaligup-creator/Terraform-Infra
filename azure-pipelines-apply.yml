@@ -51,6 +51,7 @@ parameters:
 variables:
 - name: PIPELINE_APPROVER_EMAILS
   value: $(Build.RequestedForEmail)
+- group: Mongo-secrets
 
 extends:
   template: pipelines/templates/terraform-stages.yml

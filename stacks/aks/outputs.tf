@@ -52,3 +52,23 @@ output "aks_subnet_id" {
   description = "Subnet ID used by AKS."
   value       = module.network.subnet_id
 }
+
+output "keyvault_id" {
+  description = "Azure Key Vault ID for app secrets."
+  value       = azurerm_key_vault.app_secrets.id
+}
+
+output "keyvault_name" {
+  description = "Azure Key Vault name."
+  value       = azurerm_key_vault.app_secrets.name
+}
+
+output "mongo_secret_name" {
+  description = "Key Vault secret name for MongoDB Atlas connection string."
+  value       = try(azurerm_key_vault_secret.mongo_uri[0].name, null)
+}
+
+output "jwt_secret_name" {
+  description = "Key Vault secret name for JWT key."
+  value       = try(azurerm_key_vault_secret.jwt_key[0].name, null)
+}

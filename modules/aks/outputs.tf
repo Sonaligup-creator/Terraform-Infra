@@ -27,3 +27,13 @@ output "oidc_issuer_url" {
   description = "OIDC issuer URL for workload identity."
   value       = azurerm_kubernetes_cluster.this.oidc_issuer_url
 }
+
+output "ingress_enabled" {
+  description = "Whether ingress-nginx was enabled via this module."
+  value       = var.enable_ingress
+}
+
+output "cert_manager_enabled" {
+  description = "Whether cert-manager was enabled via this module."
+  value       = var.enable_cert_manager
+}

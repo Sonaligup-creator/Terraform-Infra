@@ -160,3 +160,17 @@ variable "log_analytics_retention_days" {
   type        = number
   default     = 30
 }
+
+variable "mongodb_atlas_connection_string" {
+  description = "MongoDB Atlas connection string (SRV format). Keep empty to skip Key Vault secret creation."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "jwt_key" {
+  description = "JWT secret key used by services for token signing. Keep empty to skip Key Vault secret creation."
+  type        = string
+  default     = ""
+  sensitive   = true
+}

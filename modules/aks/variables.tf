@@ -123,3 +123,27 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "enable_ingress" {
+  description = "Whether to install ingress-nginx via Helm."
+  type        = bool
+  default     = false
+}
+
+variable "enable_cert_manager" {
+  description = "Whether to install cert-manager via Helm."
+  type        = bool
+  default     = false
+}
+
+variable "ingress_nginx_chart_version" {
+  description = "Optional ingress-nginx chart version. Empty uses latest."
+  type        = string
+  default     = ""
+}
+
+variable "cert_manager_chart_version" {
+  description = "Optional cert-manager chart version. Empty uses latest."
+  type        = string
+  default     = ""
+}
