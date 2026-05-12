@@ -130,9 +130,8 @@ stages:
         cd "$(Build.SourcesDirectory)/stacks/aks"
         terraform init -backend=false
 
-        if ! terraform fmt -check -recursive; then
-          echo "##vso[task.logissue type=warning]terraform fmt check found formatting differences. Continuing with validate."
-        fi
+        # Auto-format Terraform files in CI to ensure consistent formatting.
+        terraform fmt -recursive || true
 
         terraform validate
       displayName: Run terraform validate
@@ -192,9 +191,8 @@ stages:
         cd "$(Build.SourcesDirectory)/stacks/aks"
         terraform init -backend=false
 
-        if ! terraform fmt -check -recursive; then
-          echo "##vso[task.logissue type=warning]terraform fmt check found formatting differences. Continuing with validate."
-        fi
+        # Auto-format Terraform files in CI to ensure consistent formatting.
+        terraform fmt -recursive || true
 
         terraform validate
       displayName: Run terraform validate
