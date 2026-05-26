@@ -142,6 +142,8 @@ File: azure-pipelines-apply.yml
 - Mode guard enforces apply behavior only
 - Uses environment tfvars file:
   - environments/<environment>/terraform.tfvars
+  - <img width="1725" height="416" alt="image" src="https://github.com/user-attachments/assets/ef13521d-8a96-40b3-a6fd-ae552cef9e05" />
+
 
 ## How Destroy Pipeline Works
 
