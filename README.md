@@ -123,6 +123,8 @@ Bootstrap flow behavior:
   - Manual approval
   - Destroy backend resource group and all contained resources
   - <img width="1909" height="950" alt="image" src="https://github.com/user-attachments/assets/1f4ad570-9e2d-4cc2-baae-c97bba5ecb4e" />
+  <img width="1919" height="945" alt="image" src="https://github.com/user-attachments/assets/f32b60de-cdf4-42dc-9484-f3dd4c369de9" />
+
 
 
 Important:
