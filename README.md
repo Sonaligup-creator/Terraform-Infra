@@ -1,6 +1,7 @@
 # AKS Terraform Platform (Azure DevOps)
 
 This repository provisions AKS on Azure using Terraform and runs fully remote from Azure DevOps.
+<img width="1918" height="959" alt="image" src="https://github.com/user-attachments/assets/73a3d20c-d5de-42ab-ad52-c9e7c9935951" />
 
 It includes:
 - Production-style Terraform module layout
@@ -61,6 +62,8 @@ The stack validates this through:
   - Workload identity enabled
   - Azure policy add-on enabled
 - AcrPull role assignment from AKS kubelet identity to ACR
+<img width="1918" height="880" alt="Screenshot 2026-05-26 160017" src="https://github.com/user-attachments/assets/396a4ec5-7b3f-4280-9f9b-173ffdb7032f" />
+  
 
 ## Azure DevOps Setup
 
@@ -119,6 +122,8 @@ Bootstrap flow behavior:
   - Validate request
   - Manual approval
   - Destroy backend resource group and all contained resources
+  - <img width="1909" height="950" alt="image" src="https://github.com/user-attachments/assets/1f4ad570-9e2d-4cc2-baae-c97bba5ecb4e" />
+
 
 Important:
 - For cleanup, first run infra destroy pipeline for all environments.
@@ -155,6 +160,7 @@ Destroy flow:
   - ConfirmDestroy is YES
   - Environment approval (if configured) is granted
 5. Mode guard enforces destroy behavior only
+<img width="1725" height="460" alt="image" src="https://github.com/user-attachments/assets/e2dafc6d-b2fc-488d-a522-21943ce43028" />
 
 ## First Run Checklist
 
@@ -166,6 +172,10 @@ Destroy flow:
    - ACR login server
    - Resource group
 5. Use these outputs in your app deployment repository pipeline.
+   <img width="1910" height="939" alt="image" src="https://github.com/user-attachments/assets/4b51ad81-4de7-495a-9922-c82545283f5d" />
+   <img width="1919" height="940" alt="image" src="https://github.com/user-attachments/assets/5a9ab6e2-9432-43df-8ef0-3cae97f5cc8d" />
+
+
 
 ## Security Notes for Public Repo
 
