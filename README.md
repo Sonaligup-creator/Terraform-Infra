@@ -62,7 +62,7 @@ The stack validates this through:
   - Workload identity enabled
   - Azure policy add-on enabled
 - AcrPull role assignment from AKS kubelet identity to ACR
-<img width="1918" height="880" alt="Screenshot 2026-05-26 160017" src="https://github.com/user-attachments/assets/396a4ec5-7b3f-4280-9f9b-173ffdb7032f" />
+<img width="1918" height="856" alt="Screenshot 2026-05-26 160017" src="https://github.com/user-attachments/assets/b11a12b8-1f4d-4043-a790-d62bb0f56ab5" />
   
 
 ## Azure DevOps Setup
